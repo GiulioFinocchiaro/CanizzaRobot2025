@@ -457,13 +457,13 @@ def identifica_colore_officina():
         log("Impossibile identificare colore officina", "WARN")
         return "sconosciuto"
 """
-
+"""
 def identifica_colore_auto():
-    """Identifica il colore dell'auto di fronte al robot
+    Identifica il colore dell'auto di fronte al robot
 
     Returns:
         str: Colore dell'auto (rosso, verde, giallo, blu o sconosciuto)
-    """
+    
     log("Rilevamento colore auto...", "PARKING")
 
     # Orienta il sensore verso l'auto
@@ -493,7 +493,7 @@ def identifica_colore_auto():
     else:
         log("Colore auto non identificato", "WARN")
         return "sconosciuto"
-
+"""
 # ========================
 # LOGICA PRINCIPALE
 # ========================
