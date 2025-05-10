@@ -36,7 +36,7 @@ TEMPO_TIMER = 180  # Durata timer sicurezza (secondi)
 SERIAL_PORT = '/dev/ttyACM0'
 BAUDRATE = 115200
 MAX_SERIAL_RETRIES = 5
-SERIAL_DELAY = 1  # Pausa tra tentativi (secondi)
+SERIAL_DELAY = 0.5  # Pausa tra tentativi (secondi)
 TIMEOUT_START = 5  # Timeout attesa comando start (secondi)
 
 # --------------------------
@@ -111,7 +111,7 @@ try:
     color1 = ColorSensorA(arduino, serial_lock, "COL1", "5")
     ultrasonic = UltrasonicSensor(arduino, serial_lock)
     ultrasonicLaterale = UltrasonicSensor(arduino, serial_lock, command_code="6", sensor_id="DIST2")
-    servo_gabbia = ServoMotor(arduino, serial_lock, "SERVO1")
+    servo = ServoMotor(arduino, serial_lock, "SERVO1")
     servo_alza = ServoMotor(arduino, serial_lock, "SERVO2", min_angle=0, max_angle=360)
 
 
@@ -120,7 +120,7 @@ except Exception as e:
     log(f"Errore inizializzazione hardware: {str(e)}", "ERROR")
     sys.exit(1)
 
-coloreLego = buildhat.ColorSensor('A')
+#coloreLego = buildhat.ColorSensor('A')
 robot = Robot('C', 'D')
 gabbia = Motor('B')
 
@@ -236,18 +236,6 @@ def handshake_arduino():
                 log("Handshake completato con successo", "SUCCESS")
                 return
             elif response != "":
-
-              #  if response == "SYS|3":
-              #      log("Arduino non resettato correttamente", "WARN")
-              #      sleep(0,1)
-              #      log("Tentando un reset")
-              #      arduino.setDTR(False)
-              #      time.sleep(0.5)  # Wait a bit
-              #      arduino.setDTR(True)
-              #      log("Riavvio in corso...")
-              #     sleep(2)
-              #     log("Riavvio completato", "SUCCESS")
-
                 log(f"Risposta inattesa dall'handshake: {response}", "WARN")
         except Exception as e:
             log(f"Errore durante handshake: {str(e)}", "ERROR")
@@ -296,11 +284,6 @@ def wait_for_start():
 # ========================
 # LOGICA PRINCIPALE
 # ========================
-
-def prendi_oggetto():
-    retry_on_error(servo_gabbia.set_angle, 0)
-    gabbia.run_for_degrees(3000, 100)
-
 def main_execution():
     """Funzione principale di esecuzione"""
     log("Avvio modalità operativa", "SYSTEM")
@@ -316,9 +299,31 @@ def main_execution():
     safety_thread.start()
 
     # Configurazione iniziale servo
+    """retry_on_error(servo.set_angle, 120)"""
+
+    """
+    # Main loop
+    while not shutdown_flag.is_set():
+        # Esempio lettura sensori
+        try:
+            distance = retry_on_error(ultrasonic.get_distance)
+            color_value = retry_on_error(color1.get_color)
+            distance = retry_on_error(ultrasonic.get_distance)
+            log(f"Distanza: {distance} | Colore: {color_value}", "DATA")
+            sleep(0.1)
+        except KeyboardInterrupt:
+            shutdown_flag.set()
+            break # Salta un eventuale loop in più
+    """
 
     try:
-        print("Ciao")
+        robot.gira_sinistra(90, 50)
+        #robot.gira_sinistra(90, 50)
+        #robot.gira_destra(40, 40)
+        servo.set_angle(180)
+        sleep(3)
+        servo.set_angle(0)
+        gabbia.run_for_degrees(90, speed=-gabbia.default_speed)
     except KeyboardInterrupt:
         log("Avvio shutdown da tastiera...", "SYSTEM")
         shutdown_flag.set()
@@ -341,13 +346,8 @@ def main():
 
     try:
         handshake_arduino()
-        wait_for_start()
-        """
-        while True:
-            arduino.write(b'2')
-            if arduino.read_all() == b"SYS|2":
-                break
-        """
+        #wait_for_start()
+        arduino.write(b'2')
         main_execution()
     except Exception as e:
         log(f"Errore critico: {str(e)}", "ERROR")
