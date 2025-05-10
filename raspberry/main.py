@@ -346,8 +346,7 @@ def main():
 
     try:
         handshake_arduino()
-        #wait_for_start()
-        arduino.write(b'2')
+        wait_for_start()
         main_execution()
     except Exception as e:
         log(f"Errore critico: {str(e)}", "ERROR")
