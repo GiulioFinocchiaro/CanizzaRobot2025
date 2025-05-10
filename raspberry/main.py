@@ -3,7 +3,7 @@
 Programma di controllo per robot con Arduino
 Autore: Giulio Finocchiaro
 Versione: 1.1
-"""  # Avanzi va, pi sta vota l'autore lo lasciamo - Zitto Costa
+"""  #Avanzi va, pi sta vota l'autore lo lasciamo - Zitto Costa
 
 # Importazione librerie standard
 import signal
@@ -13,8 +13,8 @@ import sys
 from time import sleep, time
 from datetime import datetime
 
-# Importazione librerie esterne
 import buildhat
+# Importazione librerie esterne
 import serial
 from colorama import Fore, Back, Style, init as colorama_init
 
@@ -23,6 +23,7 @@ from ColorSensorA import ColorSensorA
 from ServoMotor import ServoMotor
 from UltrasonicSensor import UltrasonicSensor
 from buildhat import Motor
+
 from robot import Robot
 
 # Inizializzazione colori per logging
@@ -31,12 +32,12 @@ colorama_init(autoreset=True)
 # --------------------------
 # COSTANTI DI CONFIGURAZIONE
 # --------------------------
-TEMPO_TIMER = 180
+TEMPO_TIMER = 180  # Durata timer sicurezza (secondi)
 SERIAL_PORT = '/dev/ttyACM0'
 BAUDRATE = 115200
 MAX_SERIAL_RETRIES = 5
-SERIAL_DELAY = 1
-TIMEOUT_START = 5
+SERIAL_DELAY = 1  # Pausa tra tentativi (secondi)
+TIMEOUT_START = 5  # Timeout attesa comando start (secondi)
 
 # --------------------------
 # CONFIGURAZIONE LOGGER
@@ -63,6 +64,12 @@ shutdown_flag = threading.Event()
 # FUNZIONE DI LOGGING
 # ========================
 def log(msg, level="INFO"):
+    """Registra messaggi con timestamp e colori
+
+    Args:
+        msg (str): Messaggio da registrare
+        level (str): Livello di gravità (DEBUG/INFO/WARN/ERROR/SYSTEM/SUCCESS/DATA)
+    """
     ts = datetime.now().strftime('%H:%M:%S.%f')[:-3]
     colore = COLORI_LOG.get(level, COLORI_LOG["INFO"])
     reset = COLORI_LOG["RESET"]
@@ -94,142 +101,269 @@ def safe_serial_connect(port=SERIAL_PORT, baud=BAUDRATE, timeout=1.5):
     sys.exit(1)
 
 
+# Inizializza connessione seriale
 arduino = safe_serial_connect()
-
 
 # ========================
 # INIZIALIZZAZIONE HARDWARE
 # ========================
-def inizializza_sensore(sensore, nome_sensore):
-    try:
-        log(f"Inizializzazione sensore {nome_sensore}...", "INFO")
-        return sensore
-    except Exception as e:
-        log(f"Errore inizializzazione sensore {nome_sensore}: {str(e)}", "ERROR")
-        risposta = input(f"Il sensore {nome_sensore} non è stato rilevato. Vuoi continuare senza di esso? (y/n): ")
-        if risposta.lower() == 'y':
-            log(f"Bypassato sensore {nome_sensore}.", "WARN")
-            return None
-        else:
-            log(f"Interruzione a causa della mancata inizializzazione di {nome_sensore}.", "CRITICAL")
-            sys.exit(1)
-
-
 try:
-    colorLego = inizializza_sensore(buildhat.ColorSensor('A'), "ColorSensor")
-    color1 = inizializza_sensore(ColorSensorA(arduino, serial_lock, "COL1", "5"), "ColorSensorA")
-    ultrasonic = inizializza_sensore(UltrasonicSensor(arduino, serial_lock), "UltrasonicSensor")
-    ultrasonicLaterale = inizializza_sensore(
-        UltrasonicSensor(arduino, serial_lock, command_code="6", sensor_id="DIST2"), "UltrasonicSensor Laterale")
-    servo = inizializza_sensore(ServoMotor(arduino, serial_lock, "SERVO1"), "ServoMotor 1")
-    servo_alza = inizializza_sensore(ServoMotor(arduino, serial_lock, "SERVO2", min_angle=0, max_angle=360),
-                                     "ServoMotor 2")
-    arduino = safe_serial_connect()
-    robot = Robot('C', 'D')
-    gabbia = Motor('B')
+    color1 = ColorSensorA(arduino, serial_lock, "COL1", "5")
+    ultrasonic = UltrasonicSensor(arduino, serial_lock)
+    ultrasonicLaterale = UltrasonicSensor(arduino, serial_lock, command_code="6", sensor_id="DIST2")
+    servo_gabbia = ServoMotor(arduino, serial_lock, "SERVO1")
+    servo_alza = ServoMotor(arduino, serial_lock, "SERVO2", min_angle=0, max_angle=360)
+
+
+
 except Exception as e:
     log(f"Errore inizializzazione hardware: {str(e)}", "ERROR")
     sys.exit(1)
 
+coloreLego = buildhat.ColorSensor('A')
+robot = Robot('C', 'D')
+gabbia = Motor('B')
 
 # ========================
-# FUNZIONI DI CONTROLLO ROBOT
+# FUNZIONI DI EMERGENZA
 # ========================
 def restart_program():
+    """Riavvia completamente l'applicazione"""
     log("Inizio procedura di riavvio...", "SYSTEM")
     shutdown_flag.set()
+
     try:
         with serial_lock:
             if arduino.is_open:
-                arduino.write(b'0')
+                arduino.write(b'0')  # Comando reset Arduino
                 arduino.flush()
                 arduino.close()
     except Exception as e:
         log(f"Errore durante il reset: {str(e)}", "WARN")
+
     os.execl(sys.executable, sys.executable, *sys.argv)
 
-def muovi_avanti(durata=2, velocita=40):
-    log(f"Muovo avanti per {durata} secondi a velocità {velocita}", "INFO")
-    robot.muovi_avanti_for("seconds", durata, speed=velocita)
 
-def muovi_indietro(durata=2, velocita=40):
-    log(f"Muovo indietro per {durata} secondi a velocità {velocita}", "INFO")
-    robot.muovi_indietro_for("seconds", durata, speed=velocita)
+def termina_programma():
+    """Spegne il sistema in modo controllato"""
+    log("Avvio shutdown programmato...", "SYSTEM")
+    shutdown_flag.set()
 
-def gira_destra(gradi=90, velocita=30):
-    log(f"Giro a destra di {gradi} gradi a velocità {velocita}", "INFO")
-    robot.gira_destra(gradi, speed=velocita)
-
-def gira_sinistra(gradi=90, velocita=30):
-    log(f"Giro a sinistra di {gradi} gradi a velocità {velocita}", "INFO")
-    robot.gira_sinistra(gradi, speed=velocita)
-
-def stop():
-    log("Stop movimento", "INFO")
-    robot.stop_movimento()
-
-def abbassa_gabbia():
-    log("Abbasso la gabbia usando Motor B", "INFO")
-    gabbia.run_for_seconds(0.25, -70)
-    sleep(0.5)
-
-def alza_gabbia():
-    log("Alzo la gabbia usando Motor B", "INFO")
-    gabbia.run_for_seconds(0.25, 70)
-    sleep(0.5)
-
-def chiudi_gabbia():
-    log("Chiudo la gabbia", "INFO")
-    gabbia.run_for_seconds(1, 50)
-
-def apri_gabbia():
-    log("Apro la gabbia", "INFO")
-    gabbia.run_for_seconds(1, -50)
-
-def prendi_auto():
-    log("Prelievo auto in corso...", "PARKING")
-    abbassa_gabbia()
-    chiudi_gabbia()
-    log("Auto prelevata con successo", "PARKING")
-
-def rilascia_auto():
-    log("Rilascio auto in corso...", "PARKING")
-    apri_gabbia()
-    alza_gabbia()
-    log("Auto rilasciata con successo", "PARKING")
-
-def orienta_sensore(angolo=0):
-    log(f"Oriento il sensore a {angolo} gradi", "INFO")
-    servo.set_angle(angolo)
-    sleep(0.3)
-
-def leggi_distanza_frontale():
     try:
-        distanza = ultrasonic.get_distance()
-        log(f"Distanza frontale: {distanza} cm", "INFO")
-        return distanza
+        with serial_lock:
+            arduino.write(b'3')  # Comando spegnimento Arduino
     except Exception as e:
-        log(f"Errore lettura distanza frontale: {str(e)}", "ERROR")
-        return -1
+        log(f"Errore invio comando shutdown: {str(e)}", "WARN")
 
-def leggi_distanza_laterale():
-    try:
-        distanza = ultrasonicLaterale.get_distance()
-        log(f"Distanza laterale: {distanza} cm", "INFO")
-        return distanza
-    except Exception as e:
-        log(f"Errore lettura distanza laterale: {str(e)}", "ERROR")
-        return -1
+    restart_program()
 
-def leggi_colore():
+
+# ========================
+# THREAD DI SICUREZZA
+# ========================
+def check_shutdown():
+    """Monitora la seriale per comandi di emergenza"""
+    buffer = bytearray()
+    target_message = b"SYS|3"
+
+    while not shutdown_flag.is_set():
+        try:
+            # Lettura non bloccante
+            with serial_lock:
+                data = arduino.read(arduino.in_waiting or 1)
+
+            if data:
+                buffer.extend(data)
+
+                # Processa tutte le righe complete
+                while b"\n" in buffer:
+                    line, _, buffer = buffer.partition(b"\n")
+                    if target_message in line:
+                        log("Ricevuto comando di shutdown remoto", "SYSTEM")
+                        termina_programma()
+                        return
+
+                # Controllo dimensione buffer
+                if len(buffer) > 300:
+                    buffer = buffer[-300:]
+            else:
+                sleep(0.005)
+        except Exception as e:
+            log(f"Errore monitor shutdown: {str(e)}", "ERROR")
+
+
+# ========================
+# UTILITIES
+# ========================
+def retry_on_error(func, *args, **kwargs):
+    """Esegue una funzione con sistema di retry
+
+    Args:
+        func (callable): Funzione da eseguire
+
+    Returns:
+        Risultato della funzione
+
+    Raises:
+        SystemExit: Se shutdown_flag viene attivato
+    """
+    while not shutdown_flag.is_set():
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            log(f"Errore in {func.__name__}: {str(e)} - Riprovo...", "WARN")
+            sleep(0.1)
+
+    restart_program()
+
+
+# ========================
+# PROTOCOLLI COMUNICAZIONE
+# ========================
+def handshake_arduino():
+    """Esegue handshake iniziale con Arduino"""
+    log("Avvio procedura handshake...", "SYSTEM")
+
+    while not shutdown_flag.is_set():
+        try:
+            with serial_lock:
+                arduino.reset_input_buffer()
+                arduino.write(b'1\n')
+                arduino.flush()
+                response = arduino.read_until(b'SYS|1\n').decode().strip()
+
+            if response == "SYS|1":
+                log("Handshake completato con successo", "SUCCESS")
+                return
+            elif response != "":
+
+              #  if response == "SYS|3":
+              #      log("Arduino non resettato correttamente", "WARN")
+              #      sleep(0,1)
+              #      log("Tentando un reset")
+              #      arduino.setDTR(False)
+              #      time.sleep(0.5)  # Wait a bit
+              #      arduino.setDTR(True)
+              #      log("Riavvio in corso...")
+              #     sleep(2)
+              #     log("Riavvio completato", "SUCCESS")
+
+                log(f"Risposta inattesa dall'handshake: {response}", "WARN")
+        except Exception as e:
+            log(f"Errore durante handshake: {str(e)}", "ERROR")
+            sleep(0.5)
+
+    restart_program()
+
+
+def wait_for_start():
+    """Attende comando di start da Arduino"""
+    log("In attesa comando START...", "SYSTEM")
+    buffer = bytearray()
+    start_time = time()
+
+    while not shutdown_flag.is_set():
+        try:
+            # Lettura dati disponibili
+            with serial_lock:
+                data = arduino.read(arduino.in_waiting or 1)
+
+            if data:
+                buffer.extend(data)
+
+                # Cerca comando start
+                while b"\n" in buffer:
+                    line, _, buffer = buffer.partition(b"\n")
+                    if b"SYS|2" in line:
+                        log("Ricevuto comando START", "SUCCESS")
+                        return
+
+                # Controllo overflow buffer
+                if len(buffer) > 300:
+                    buffer = buffer[-300:]
+            else:
+                sleep(0.005)
+
+            # Controllo timeout
+            if time() - start_time > TIMEOUT_START:
+                log("Timeout attesa comando START", "ERROR")
+                restart_program()
+        except Exception as e:
+            log(f"Errore durante l'attesa START: {str(e)}", "ERROR")
+            restart_program()
+
+
+# ========================
+# LOGICA PRINCIPALE
+# ========================
+
+def prendi_oggetto():
+    retry_on_error(servo_gabbia.set_angle, 0)
+    gabbia.run_for_degrees(3000, 100)
+
+def main_execution():
+    """Funzione principale di esecuzione"""
+    log("Avvio modalità operativa", "SYSTEM")
+
+    # Configura timer sicurezza
+    safety_timer = threading.Timer(TEMPO_TIMER, termina_programma)
+    safety_timer.daemon = True
+    safety_timer.start()
+
+    # Avvio thread sicurezza
+    safety_thread = threading.Thread(target=check_shutdown)
+    safety_thread.daemon = True
+    safety_thread.start()
+
+    # Configurazione iniziale servo
+
     try:
-        if color1:
-            rgb = color1.get_color_rgb()
-            log(f"Colore rilevato: {rgb}", "INFO")
-            return rgb
-        else:
-            log("Sensore di colore non disponibile", "WARN")
-            return None
+        print("Ciao")
+    except KeyboardInterrupt:
+        log("Avvio shutdown da tastiera...", "SYSTEM")
+        shutdown_flag.set()
+        try:
+            with serial_lock:
+                arduino.write(b'3')  # Comando spegnimento Arduino
+        except Exception as e:
+            log(f"Errore invio comando shutdown: {str(e)}", "WARN")
+    finally:
+        safety_timer.cancel()
+        safety_thread.join()
+
+
+# ========================
+# ENTRYPOINT
+# ========================
+def main():
+    """Punto d'ingresso principale"""
+    signal.signal(signal.SIGINT, lambda s, f: shutdown_flag.set())
+
+    try:
+        handshake_arduino()
+        wait_for_start()
+        """
+        while True:
+            arduino.write(b'2')
+            if arduino.read_all() == b"SYS|2":
+                break
+        """
+        main_execution()
     except Exception as e:
-        log(f"Errore lettura colore: {str(e)}", "ERROR")
-        return None
+        log(f"Errore critico: {str(e)}", "ERROR")
+    finally:
+        shutdown_flag.set()
+        shutdown_flag.wait()
+
+        with serial_lock:
+            try:
+                if arduino.is_open:
+                    arduino.close()
+            except Exception as e:
+                log(f"Errore chiusura seriale: {str(e)}", "WARN")
+
+        log("Applicazione terminata", "SYSTEM")
+
+
+if __name__ == "__main__":
+    main()
