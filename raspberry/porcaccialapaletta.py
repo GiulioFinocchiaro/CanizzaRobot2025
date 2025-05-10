@@ -416,7 +416,6 @@ if __name__ == "__main__":
     try:
         # Inizializza la connessione seriale
         arduino = safe_serial_connect()
-        
         # Inizializzazione dei sensori
         colorLego = inizializza_sensore(buildhat.ColorSensor('A'), "ColorSensor")
         color1 = inizializza_sensore(ColorSensorA(arduino, serial_lock, "COL1", "5"), "ColorSensorA")
@@ -426,7 +425,6 @@ if __name__ == "__main__":
         servo_alza = inizializza_sensore(ServoMotor(arduino, serial_lock, "SERVO2", min_angle=0, max_angle=360), "ServoMotor 2")
         robot = Robot('C', 'D')
         gabbia = Motor('B')
-        
         # Avvia il controllo manuale
         esegui_percorso()
         
