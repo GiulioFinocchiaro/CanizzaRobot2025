@@ -120,7 +120,7 @@ except Exception as e:
     log(f"Errore inizializzazione hardware: {str(e)}", "ERROR")
     sys.exit(1)
 
-#coloreLego = buildhat.ColorSensor('A')
+coloreLego = buildhat.ColorSensor('A')
 robot = Robot('C', 'D')
 gabbia = Motor('B')
 
@@ -281,6 +281,219 @@ def wait_for_start():
             restart_program()
 
 
+def alza_gabbia():
+    """Alza la gabbia/pinza usando il motore nella porta B"""
+    log("Alzo la gabbia usando Motor B", "INFO")
+    # Uso del motore per alzare la gabbia
+    # Il segno opposto rispetto all'abbassamento
+    gabbia.run_for_seconds(0.25, 70)  # Velocità positiva per alzare
+    sleep(0.5)  # Pausa per stabilizzazione
+
+
+def chiudi_gabbia():
+    """Chiude la gabbia/pinza"""
+    log("Chiudo la gabbia", "INFO")
+    gabbia.run_for_seconds(1, 50)
+
+
+def apri_gabbia():
+    """Apre la gabbia/pinza"""
+    log("Apro la gabbia", "INFO")
+    gabbia.run_for_seconds(1, -50)
+
+
+def prendi_auto():
+    """Effettua la manovra per prendere un'auto"""
+    log("Prelievo auto in corso...", "PARKING")
+
+    # Abbassiamo la gabbia/pinza per prendere l'auto
+    abbassa_gabbia()
+
+    # Chiusura pinza/gabbia
+    chiudi_gabbia()
+
+    log("Auto prelevata con successo", "PARKING")
+
+
+def rilascia_auto():
+    """Effettua la manovra per rilasciare un'auto"""
+    log("Rilascio auto in corso...", "PARKING")
+
+    # Apertura pinza/gabbia
+    apri_gabbia()
+
+    # Alziamo la gabbia/pinza
+    alza_gabbia()
+
+    log("Auto rilasciata con successo", "PARKING")
+
+
+def orienta_sensore(angolo=0):
+    """Orienta il sensore di colore a un angolo specifico
+
+    Args:
+        angolo (int): Angolo di orientamento (0-180)
+    """
+    log(f"Oriento il sensore a {angolo} gradi", "INFO")
+    servo.set_angle(angolo)
+    sleep(0.3)  # Attesa stabilizzazione
+
+
+def leggi_distanza_frontale():
+    """Legge la distanza frontale dall'ostacolo
+
+    Returns:
+        float: Distanza in cm
+    """
+    try:
+        distanza = ultrasonic.get_distance()
+        log(f"Distanza frontale: {distanza} cm", "INFO")
+        return distanza
+    except Exception as e:
+        log(f"Errore lettura distanza frontale: {str(e)}", "ERROR")
+        return -1
+
+
+def leggi_distanza_laterale():
+    """Legge la distanza laterale dall'ostacolo
+
+    Returns:
+        float: Distanza in cm
+    """
+    try:
+        distanza = ultrasonicLaterale.get_distance()
+        log(f"Distanza laterale: {distanza} cm", "INFO")
+        return distanza
+    except Exception as e:
+        log(f"Errore lettura distanza laterale: {str(e)}", "ERROR")
+        return -1
+
+
+def muovi_avanti(durata=2, velocita=40):
+    """Muove il robot in avanti per un tempo specificato
+
+    Args:
+        durata (float): Durata del movimento in secondi
+        velocita (int): Velocità del movimento (0-100)
+    """
+    log(f"Muovo avanti per {durata} secondi a velocità {velocita}", "INFO")
+    robot.muovi_avanti_for("seconds", durata, speed=velocita)
+
+
+def muovi_indietro(durata=2, velocita=40):
+    """Muove il robot indietro per un tempo specificato
+
+    Args:
+        durata (float): Durata del movimento in secondi
+        velocita (int): Velocità del movimento (0-100)
+    """
+    log(f"Muovo indietro per {durata} secondi a velocità {velocita}", "INFO")
+    robot.muovi_indietro_for("seconds", durata, speed=velocita)
+
+
+def gira_destra(gradi=90, velocita=30):
+    """Fa girare il robot a destra
+
+    Args:
+        gradi (int): Gradi di rotazione
+        velocita (int): Velocità di rotazione (0-100)
+    """
+    log(f"Giro a destra di {gradi} gradi a velocità {velocita}", "INFO")
+    robot.gira_destra(gradi, speed=velocita)
+
+
+def gira_sinistra(gradi=90, velocita=30):
+    """Fa girare il robot a sinistra
+
+    Args:
+        gradi (int): Gradi di rotazione
+        velocita (int): Velocità di rotazione (0-100)
+    """
+    log(f"Giro a sinistra di {gradi} gradi a velocità {velocita}", "INFO")
+    robot.gira_sinistra(gradi, speed=velocita)
+
+
+def stop():
+    """Ferma immediatamente il robot"""
+    log("Stop movimento", "INFO")
+    robot.stop_movimento()
+
+
+def abbassa_gabbia():
+    """Abbassa la gabbia/pinza usando il motore nella porta B"""
+    log("Abbasso la gabbia usando Motor B", "INFO")
+    # Uso del motore per abbassare la gabbia
+    # Il valore positivo/negativo dipende dalla configurazione meccanica
+    gabbia.run_for_seconds(0.25, -70)  # Velocità negativa per abbassare
+    sleep(0.5)  # Pausa per stabilizzazione
+"""
+def identifica_colore_officina():
+    Identifica il colore dell'officina disponibile
+
+    Returns:
+        str: Colore dell'officina (verde, giallo o sconosciuto)
+    
+    log("Rilevamento colore officina disponibile...", "PARKING")
+
+    # Orienta il sensore verso la parete
+    orienta_sensore(90)
+
+    # Leggi il colore con il sensore
+    rgb = leggi_colore()
+
+    # Identifica il colore
+    if rgb is None:
+        return "sconosciuto"
+
+    r, g, b = rgb
+
+    if g > 150 and r < 80 and b < 80:
+        log("Officina VERDE attiva", "PARKING")
+        return "verde"
+    elif r > 150 and g > 150 and b < 80:
+        log("Officina GIALLA attiva", "PARKING")
+        return "giallo"
+    else:
+        log("Impossibile identificare colore officina", "WARN")
+        return "sconosciuto"
+"""
+
+def identifica_colore_auto():
+    """Identifica il colore dell'auto di fronte al robot
+
+    Returns:
+        str: Colore dell'auto (rosso, verde, giallo, blu o sconosciuto)
+    """
+    log("Rilevamento colore auto...", "PARKING")
+
+    # Orienta il sensore verso l'auto
+    orienta_sensore(0)
+
+    # Leggi il colore con il sensore
+    rgb = leggi_colore()
+
+    # Identifica il colore
+    if rgb is None:
+        return "sconosciuto"
+
+    r, g, b = rgb
+
+    if r > 150 and g < 80 and b < 80:
+        log("Auto ROSSA rilevata", "PARKING")
+        return "rosso"
+    elif g > 150 and r < 80 and b < 80:
+        log("Auto VERDE rilevata", "PARKING")
+        return "verde"
+    elif r > 150 and g > 150 and b < 80:
+        log("Auto GIALLA rilevata", "PARKING")
+        return "giallo"
+    elif b > 150 and r < 80 and g < 80:
+        log("Auto BLU rilevata", "PARKING")
+        return "blu"
+    else:
+        log("Colore auto non identificato", "WARN")
+        return "sconosciuto"
+
 # ========================
 # LOGICA PRINCIPALE
 # ========================
@@ -297,24 +510,6 @@ def main_execution():
     safety_thread = threading.Thread(target=check_shutdown)
     safety_thread.daemon = True
     safety_thread.start()
-
-    # Configurazione iniziale servo
-    """retry_on_error(servo.set_angle, 120)"""
-
-    """
-    # Main loop
-    while not shutdown_flag.is_set():
-        # Esempio lettura sensori
-        try:
-            distance = retry_on_error(ultrasonic.get_distance)
-            color_value = retry_on_error(color1.get_color)
-            distance = retry_on_error(ultrasonic.get_distance)
-            log(f"Distanza: {distance} | Colore: {color_value}", "DATA")
-            sleep(0.1)
-        except KeyboardInterrupt:
-            shutdown_flag.set()
-            break # Salta un eventuale loop in più
-    """
 
     try:
         robot.gira_sinistra(90, 50)
