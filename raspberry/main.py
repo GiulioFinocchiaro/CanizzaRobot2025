@@ -542,7 +542,7 @@ def main():
     try:
         handshake_arduino()
         wait_for_start()
-        main_execution()
+        #main_execution()
     except Exception as e:
         log(f"Errore critico: {str(e)}", "ERROR")
     finally:
