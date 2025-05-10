@@ -73,6 +73,14 @@ def log(msg, level="INFO"):
 # GESTIONE SERIALE
 # ========================
 def safe_serial_connect(port=SERIAL_PORT, baud=BAUDRATE, timeout=1.5):
+    """Crea connessione seriale con sistema di retry
+
+    Returns:
+        serial.Serial: Oggetto seriale connesso
+
+    Raises:
+        SystemExit: Se fallisce dopo MAX_SERIAL_RETRIES tentativi
+    """
     for attempt in range(1, MAX_SERIAL_RETRIES + 1):
         try:
             ser = serial.Serial(port, baud, timeout=timeout)
